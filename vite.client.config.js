@@ -20,21 +20,44 @@ jobs:
           
       - name: Build Project
         run: |
-          # Modify vite.config.ts temporarily for GitHub Pages
-          sed -i 's|outDir: path.resolve(__dirname, "dist/public"),|outDir: path.resolve(__dirname, "dist"),|' vite.config.ts
+          # Modify vite.config.ts for GitHub Pages
+          cat > vite.config.ts << 'EOL'
+          import { defineConfig } from "vite";
+          import react from "@vitejs/plugin-react";
+          import themePlugin from "@replit/vite-plugin-shadcn-theme-json";
+          import path, { dirname } from "path";
+          import { fileURLToPath } from "url";
+
+          const __filename = fileURLToPath(import.meta.url);
+          const __dirname = dirname(__filename);
+
+          export default defineConfig({
+            base: '/RPN-Trainer/',
+            plugins: [
+              react(),
+              themePlugin(),
+            ],
+            resolve: {
+              alias: {
+                "@": path.resolve(__dirname, "client", "src"),
+                "@shared": path.resolve(__dirname, "shared"),
+              },
+            },
+            root: path.resolve(__dirname, "client"),
+            build: {
+              outDir: path.resolve(__dirname, "dist"),
+              emptyOutDir: true,
+            },
+          });
+          EOL
           
-          # Add .nojekyll file to prevent Jekyll processing
+          # Create .nojekyll file
           touch .nojekyll
           
-          # Run the build with the original config
+          # Build the project
           npm run build
           
-          # Make sure we have an index.html at the root level of the output
-          if [ ! -f "dist/index.html" ]; then
-            cp dist/public/index.html dist/
-          fi
-          
-          # Copy the .nojekyll file to the dist directory
+          # Copy .nojekyll to dist directory
           cp .nojekyll dist/
           
       - name: Deploy to GitHub Pages
