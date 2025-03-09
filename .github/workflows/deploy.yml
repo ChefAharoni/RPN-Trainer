@@ -1,0 +1,56 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Install dependencies
+        run: npm install
+          
+      - name: Create Static Site
+        run: |
+          # Create a simplified index.html that directly references the client files
+          cat > index.html << 'EOL'
+          <!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <meta charset="UTF-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+              <link rel="icon" type="image/svg+xml" href="./calculator-icon.svg" />
+              <title>RPN Calculator Trainer</title>
+              <meta name="description" content="Learn and practice Reverse Polish Notation calculations" />
+              <script type="module" crossorigin src="./assets/index.js"></script>
+              <link rel="stylesheet" href="./assets/index.css">
+            </head>
+            <body>
+              <div id="root"></div>
+            </body>
+          </html>
+          EOL
+          
+          # Create assets directory
+          mkdir -p assets
+          
+          # Run Vite build for client components only
+          npx vite build client --outDir ../assets
+          
+          # Move client assets where they need to be
+          mv assets/* .
+          
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: .
+          branch: gh-pages
+          clean: true
