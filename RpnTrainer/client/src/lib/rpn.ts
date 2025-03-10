@@ -47,18 +47,9 @@ export function evaluateRPN(expression: string): number {
 
 // Generate a random RPN expression
 export function generateRandomRPNExpression(): string {
+  // This implementation uses a more reliable approach to ensure valid RPN expressions
+  // A valid RPN expression must have exactly one more operand than operators
   const operators = ['+', '-', '*', '/'];
-  let tokens: (string | number)[] = [];
-  let stackSize = 0;
-  
-  // Start with 1-2 numbers
-  tokens.push(Math.floor(Math.random() * 9) + 1);
-  if (Math.random() > 0.3) {
-    tokens.push(Math.floor(Math.random() * 9) + 1);
-    stackSize = 2;
-  } else {
-    stackSize = 1;
-  }
   
   // Determine target token count (5-7 in most cases, max 10)
   // We use a skewed distribution to favor 5-7 range
@@ -78,70 +69,187 @@ export function generateRandomRPNExpression(): string {
     targetTokenCount = 10; // 2% chance for 10 tokens
   }
   
-  // Maximum total tokens is 10 (operands + operators)
-  // We need to calculate max length more carefully to ensure valid RPN expression
-  // In RPN, if we have N operands, we need (N-1) operators to consume them
-  const maxOperands = Math.ceil(targetTokenCount / 2) + 1; // Estimate based on target count
-  let operandCount = tokens.length; // Current number of operands
-  let operatorCount = 0; // Current number of operators
+  // Calculate the required number of operands and operators
+  // For n tokens where n is odd, we need (n+1)/2 operands and (n-1)/2 operators
+  // For n tokens where n is even, we need n/2+1 operands and n/2-1 operators
+  let numOperands = Math.ceil(targetTokenCount / 2) + (targetTokenCount % 2 === 0 ? 0 : 0);
+  let numOperators = targetTokenCount - numOperands;
   
-  while (operandCount + operatorCount < targetTokenCount && stackSize > 0 && operandCount + operatorCount < 10) {
-    // If stack size < 2, we must add a number (if we haven't reached max operands)
-    if (stackSize < 2 && operandCount < maxOperands) {
-      tokens.push(Math.floor(Math.random() * 9) + 1);
-      stackSize++;
-      operandCount++;
-    } else if (operandCount < maxOperands && Math.random() > 0.6) {
-      // Add a number with lower probability as expression grows
-      tokens.push(Math.floor(Math.random() * 9) + 1);
-      stackSize++;
-      operandCount++;
-    } else {
-      // Add an operator
-      const op = operators[Math.floor(Math.random() * operators.length)];
-      
-      // Avoid division by zero
-      if (op === '/' && tokens[tokens.length - 1] === 0) {
-        // Try another operator
-        const alternativeOps = ['+', '-', '*'];
-        tokens.push(alternativeOps[Math.floor(Math.random() * alternativeOps.length)]);
-      } else {
-        tokens.push(op);
+  // Ensure we have exactly one more operand than operators
+  if (numOperands - numOperators !== 1) {
+    numOperators = numOperands - 1;
+  }
+  
+  // Generate the tokens using a new approach that guarantees valid RPN
+  return generateValidRPNExpression(numOperands, numOperators);
+}
+
+// Helper function to generate valid RPN expressions
+function generateValidRPNExpression(numOperands: number, numOperators: number): string {
+  const operators = ['+', '-', '*', '/'];
+  let attempts = 0;
+  const maxAttempts = 50; // Avoid infinite recursion
+  
+  // Define helper functions outside the loop to comply with strict mode
+  const addOperandFn = (
+    tokens: (string | number)[], 
+    remainingOperands: number, 
+    stackSize: number
+  ): [number, number] => {
+    tokens.push(Math.floor(Math.random() * 9) + 1);
+    return [remainingOperands - 1, stackSize + 1];
+  };
+  
+  const addOperatorFn = (
+    tokens: (string | number)[], 
+    remainingOperators: number, 
+    stackSize: number
+  ): [string | number, number, number] => {
+    let op: string;
+    
+    // Handle division specially to ensure integer results
+    if (Math.random() < 0.25) { // 25% chance for division when picking an operator
+      // Try to find a suitable divisor
+      let found = false;
+      for (let i = 0; i < 5; i++) { // Try a few times to find a suitable division
+        const simStack: number[] = [];
+        const testTokens = [...tokens]; // Copy current tokens
+        
+        // Simulate the stack up to this point
+        for (const token of testTokens) {
+          if (typeof token === 'number') {
+            simStack.push(token);
+          } else {
+            const b = simStack.pop() as number;
+            const a = simStack.pop() as number;
+            switch (token) {
+              case '+': simStack.push(a + b); break;
+              case '-': simStack.push(a - b); break;
+              case '*': simStack.push(a * b); break;
+              case '/': simStack.push(a / b); break;
+            }
+          }
+        }
+        
+        // Get the top two items on the stack
+        if (simStack.length >= 2) {
+          const divisor = simStack.pop() as number;
+          const dividend = simStack.pop() as number;
+          
+          // Check if divisor is non-zero and division produces an integer
+          if (divisor !== 0 && dividend % divisor === 0) {
+            op = '/';
+            found = true;
+            break;
+          }
+        }
       }
       
-      stackSize--; // Operator consumes 2 values and produces 1
-      operatorCount++;
+      if (!found) {
+        // Pick a non-division operator
+        const alternativeOps = ['+', '-', '*'];
+        op = alternativeOps[Math.floor(Math.random() * alternativeOps.length)];
+      } else {
+        op = '/'; // Explicitly set if found
+      }
+    } else {
+      // Pick a random non-division operator
+      const nonDivisionOps = ['+', '-', '*'];
+      op = nonDivisionOps[Math.floor(Math.random() * nonDivisionOps.length)];
+    }
+    
+    return [op, remainingOperators - 1, stackSize - 1]; // Operator consumes 2 values and produces 1
+  };
+  
+  while (attempts < maxAttempts) {
+    attempts++;
+    
+    // We'll build the expression by tracking the stack state at each step
+    let tokens: (string | number)[] = [];
+    let stackSize = 0;
+    let remainingOperands = numOperands;
+    let remainingOperators = numOperators;
+    
+    // Always start with an operand
+    tokens.push(Math.floor(Math.random() * 9) + 1);
+    remainingOperands--;
+    stackSize = 1;
+    
+    while (remainingOperands > 0 || remainingOperators > 0) {
+      // We can add an operator if we have at least 2 items on the stack
+      // and we have operators remaining
+      const canAddOperator = stackSize >= 2 && remainingOperators > 0;
       
-      // Break if we've reached the target token count
-      if (operandCount + operatorCount >= targetTokenCount) {
+      // We can add an operand if we have operands remaining
+      const canAddOperand = remainingOperands > 0;
+      
+      // If we can't add either, the generation has failed
+      if (!canAddOperator && !canAddOperand) {
         break;
+      }
+      
+      // If we can only add one type, do that
+      if (canAddOperator && !canAddOperand) {
+        const [op, newRemOps, newStackSize] = addOperatorFn(tokens, remainingOperators, stackSize);
+        tokens.push(op);
+        remainingOperators = newRemOps;
+        stackSize = newStackSize;
+        continue;
+      }
+      
+      if (!canAddOperator && canAddOperand) {
+        const [newRemOps, newStackSize] = addOperandFn(tokens, remainingOperands, stackSize);
+        remainingOperands = newRemOps;
+        stackSize = newStackSize;
+        continue;
+      }
+      
+      // If we can add both, decide based on the stack state and remaining tokens
+      // We need to ensure we'll be able to reduce the stack to 1 item at the end
+      
+      // If adding all remaining operands would overload the stack beyond what 
+      // our operators can reduce, we should add an operator now
+      if (stackSize + remainingOperands - remainingOperators > 1) {
+        const [op, newRemOps, newStackSize] = addOperatorFn(tokens, remainingOperators, stackSize);
+        tokens.push(op);
+        remainingOperators = newRemOps;
+        stackSize = newStackSize;
+      } else {
+        // Otherwise decide randomly, but favor operands early and operators later
+        const threshold = 0.5 * (remainingOperands / numOperands); // Decreases as we use more operands
+        if (Math.random() < threshold) {
+          const [newRemOps, newStackSize] = addOperandFn(tokens, remainingOperands, stackSize);
+          remainingOperands = newRemOps;
+          stackSize = newStackSize;
+        } else {
+          const [op, newRemOps, newStackSize] = addOperatorFn(tokens, remainingOperators, stackSize);
+          tokens.push(op);
+          remainingOperators = newRemOps;
+          stackSize = newStackSize;
+        }
+      }
+    }
+    
+    // Check if we used all operands and operators and the stack has exactly 1 item
+    if (remainingOperands === 0 && remainingOperators === 0 && stackSize === 1) {
+      const expression = tokens.join(' ');
+      const result = evaluateRPN(expression);
+      
+      // Check result is valid (integer and reasonable size)
+      if (!isNaN(result) && isFinite(result) && Math.abs(result) <= 1000 && Number.isInteger(result)) {
+        return expression;
       }
     }
   }
   
-  // Ensure the expression is valid by adding operators if needed
-  while (stackSize > 1 && operandCount + operatorCount < targetTokenCount && operandCount + operatorCount < 10) {
-    const op = operators[Math.floor(Math.random() * operators.length)];
-    tokens.push(op);
-    stackSize--;
-    operatorCount++;
+  // If we fail after max attempts, try with different counts
+  // If the target token count is high, try with fewer tokens
+  if (numOperands + numOperators > 6) {
+    return generateValidRPNExpression(numOperands - 1, numOperators - 1);
   }
   
-  // If we still have multiple items on stack and can't add more operators (due to max limit),
-  // restart and try a different expression
-  if (stackSize > 1 && operandCount + operatorCount >= 10) {
-    return generateRandomRPNExpression();
-  }
-  
-  // Check if the result is valid (integer and not too complex)
-  const result = evaluateRPN(tokens.join(' '));
-  
-  // If result is invalid, not an integer, or too complex, generate a new expression
-  if (isNaN(result) || !isFinite(result) || Math.abs(result) > 1000 || !Number.isInteger(result)) {
-    return generateRandomRPNExpression();
-  }
-  
-  return tokens.join(' ');
+  // Fall back to a simple expression if all else fails
+  return "3 4 + 5 *";
 }
 
 // Generate steps for stack visualization

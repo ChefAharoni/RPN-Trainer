@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,13 @@ import {
   type StackStep
 } from "@/lib/rpn";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useKeyboardShortcuts, getShortcutDisplay, isMac } from "@/hooks/use-keyboard-shortcuts";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export function RPNCalculator() {
   const [currentExpression, setCurrentExpression] = useState("");
@@ -20,6 +27,8 @@ export function RPNCalculator() {
   const [validationMessage, setValidationMessage] = useState<string>("");
   const [showValidationMessage, setShowValidationMessage] = useState(false);
   const [showVisualization, setShowVisualization] = useState(false);
+  
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Generate a new expression on initial load
   useEffect(() => {
@@ -27,7 +36,7 @@ export function RPNCalculator() {
   }, []);
 
   // Generate a new RPN expression and reset state
-  const generateNewExpression = () => {
+  const generateNewExpression = useCallback(() => {
     setIsCorrect(null);
     setUserAnswer("");
     setShowValidationMessage(false);
@@ -41,16 +50,21 @@ export function RPNCalculator() {
     // Generate stack visualization steps
     const steps = generateStackSteps(expression);
     setStackSteps(steps);
-  };
+    
+    // Focus on the input field for better UX
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [inputRef]);
 
   // Handle user answer input
-  const handleAnswerInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAnswerInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setUserAnswer(e.target.value);
     setShowValidationMessage(false);
-  };
+  }, []);
 
   // Check if the user's answer is correct
-  const handleCheckAnswer = () => {
+  const handleCheckAnswer = useCallback(() => {
     const parsedUserAnswer = parseFloat(userAnswer);
     
     if (isNaN(parsedUserAnswer)) {
@@ -62,7 +76,38 @@ export function RPNCalculator() {
     // Check if the answer is correct (allow small floating point differences)
     const isAnswerCorrect = Math.abs(parsedUserAnswer - (currentAnswer || 0)) < 0.001;
     setIsCorrect(isAnswerCorrect);
-  };
+  }, [userAnswer, currentAnswer]);
+  
+  // Setup keyboard shortcuts - use document-level event listeners for better compatibility
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Check Answer: Cmd/Ctrl + Enter
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        // Add a small delay to ensure input value is properly registered
+        setTimeout(() => {
+          // Focus on input first to ensure its value is captured
+          if (inputRef.current) inputRef.current.focus();
+          handleCheckAnswer();
+        }, 10);
+        return;
+      }
+      
+      // New Expression: Cmd/Ctrl + .
+      if (e.key === '.' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        generateNewExpression();
+        return;
+      }
+    };
+    
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [handleCheckAnswer, generateNewExpression]);
+  
+  // Define shortcut labels for tooltips
+  const checkAnswerShortcut = getShortcutDisplay({ key: "Enter", ctrlKey: true, metaKey: true });
+  const newExpressionShortcut = getShortcutDisplay({ key: ".", ctrlKey: true, metaKey: true });
 
   return (
     <Card className="mb-8">
@@ -83,12 +128,20 @@ export function RPNCalculator() {
           <div className="flex">
             <Input
               id="answer-input"
+              ref={inputRef}
               type="number"
               placeholder="Enter your answer"
               value={userAnswer}
               onChange={handleAnswerInput}
               step="any"
               className="w-full"
+              onKeyDown={(e) => {
+                // Also allow regular Enter key to check answer for better UX
+                if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+                  handleCheckAnswer();
+                  e.preventDefault();
+                }
+              }}
             />
           </div>
           {showValidationMessage && (
@@ -98,19 +151,50 @@ export function RPNCalculator() {
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 mb-6">
-          <Button 
-            onClick={handleCheckAnswer}
-            className="bg-primary hover:bg-primary/90 text-white font-medium py-2 px-6 rounded-md transition-colors duration-300 flex-1"
-          >
-            Check Answer
-          </Button>
-          <Button 
-            onClick={generateNewExpression}
-            className="bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-6 rounded-md transition-colors duration-300 flex-1"
-          >
-            New Expression
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  onClick={handleCheckAnswer}
+                  className="bg-primary hover:bg-primary/90 text-white font-medium py-2 px-6 rounded-md transition-colors duration-300 flex-1"
+                >
+                  Check Answer
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex items-center gap-1">
+                  <span>Check your answer</span>
+                  <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded font-mono">
+                    {checkAnswerShortcut}
+                  </span>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  onClick={generateNewExpression}
+                  className="bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-6 rounded-md transition-colors duration-300 flex-1"
+                >
+                  New Expression
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex items-center gap-1">
+                  <span>Generate new expression</span>
+                  <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded font-mono">
+                    {newExpressionShortcut}
+                  </span>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
+
+
 
         {/* Result Feedback */}
         {isCorrect !== null && (
