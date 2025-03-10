@@ -32,8 +32,11 @@ export function evaluateRPN(expression: string): number {
           if (b === 0) {
             return NaN;
           }
-          // Round to 2 decimal places for nicer answers
-          stack.push(Math.round((a / b) * 100) / 100);
+          // Only allow integer divisions (no decimal results)
+          if (a % b !== 0) {
+            return NaN; // This will cause the generator to try again
+          }
+          stack.push(a / b);
           break;
       }
     }
@@ -57,48 +60,84 @@ export function generateRandomRPNExpression(): string {
     stackSize = 1;
   }
   
-  // Length of expression between 5 and 9 tokens
-  const targetLength = Math.floor(Math.random() * 5) + 5;
+  // Determine target token count (5-7 in most cases, max 10)
+  // We use a skewed distribution to favor 5-7 range
+  let targetTokenCount;
+  const rand = Math.random();
+  if (rand < 0.4) {
+    targetTokenCount = 5; // 40% chance for 5 tokens
+  } else if (rand < 0.7) {
+    targetTokenCount = 6; // 30% chance for 6 tokens
+  } else if (rand < 0.9) {
+    targetTokenCount = 7; // 20% chance for 7 tokens
+  } else if (rand < 0.95) {
+    targetTokenCount = 8; // 5% chance for 8 tokens
+  } else if (rand < 0.98) {
+    targetTokenCount = 9; // 3% chance for 9 tokens
+  } else {
+    targetTokenCount = 10; // 2% chance for 10 tokens
+  }
   
-  while (tokens.length < targetLength) {
-    // If stack size < 2, we must add a number
-    if (stackSize < 2) {
+  // Maximum total tokens is 10 (operands + operators)
+  // We need to calculate max length more carefully to ensure valid RPN expression
+  // In RPN, if we have N operands, we need (N-1) operators to consume them
+  const maxOperands = Math.ceil(targetTokenCount / 2) + 1; // Estimate based on target count
+  let operandCount = tokens.length; // Current number of operands
+  let operatorCount = 0; // Current number of operators
+  
+  while (operandCount + operatorCount < targetTokenCount && stackSize > 0 && operandCount + operatorCount < 10) {
+    // If stack size < 2, we must add a number (if we haven't reached max operands)
+    if (stackSize < 2 && operandCount < maxOperands) {
       tokens.push(Math.floor(Math.random() * 9) + 1);
       stackSize++;
+      operandCount++;
+    } else if (operandCount < maxOperands && Math.random() > 0.6) {
+      // Add a number with lower probability as expression grows
+      tokens.push(Math.floor(Math.random() * 9) + 1);
+      stackSize++;
+      operandCount++;
     } else {
-      // Decide whether to add number or operator
-      const addOperator = Math.random() > 0.5;
+      // Add an operator
+      const op = operators[Math.floor(Math.random() * operators.length)];
       
-      if (addOperator) {
-        const op = operators[Math.floor(Math.random() * operators.length)];
-        
-        // Avoid division by zero
-        if (op === '/' && tokens[tokens.length - 1] === 0) {
-          tokens.push(Math.floor(Math.random() * 8) + 1); // 1-9, avoiding 0
-          stackSize++;
-        } else {
-          tokens.push(op);
-          stackSize--; // Operator consumes 2 values and produces 1
-        }
+      // Avoid division by zero
+      if (op === '/' && tokens[tokens.length - 1] === 0) {
+        // Try another operator
+        const alternativeOps = ['+', '-', '*'];
+        tokens.push(alternativeOps[Math.floor(Math.random() * alternativeOps.length)]);
       } else {
-        tokens.push(Math.floor(Math.random() * 9) + 1);
-        stackSize++;
+        tokens.push(op);
+      }
+      
+      stackSize--; // Operator consumes 2 values and produces 1
+      operatorCount++;
+      
+      // Break if we've reached the target token count
+      if (operandCount + operatorCount >= targetTokenCount) {
+        break;
       }
     }
   }
   
   // Ensure the expression is valid by adding operators if needed
-  while (stackSize > 1) {
+  while (stackSize > 1 && operandCount + operatorCount < targetTokenCount && operandCount + operatorCount < 10) {
     const op = operators[Math.floor(Math.random() * operators.length)];
     tokens.push(op);
     stackSize--;
+    operatorCount++;
   }
   
-  // Check if the result is valid (not too complicated)
+  // If we still have multiple items on stack and can't add more operators (due to max limit),
+  // restart and try a different expression
+  if (stackSize > 1 && operandCount + operatorCount >= 10) {
+    return generateRandomRPNExpression();
+  }
+  
+  // Check if the result is valid (integer and not too complex)
   const result = evaluateRPN(tokens.join(' '));
   
-  // If result is invalid or too complex, generate a new expression
-  if (isNaN(result) || !isFinite(result) || Math.abs(result) > 1000) {
+  // If result is invalid, not an integer, or too complex, generate a new expression
+  if (isNaN(result) || !isFinite(result) || Math.abs(result) > 1000 || !Number.isInteger(result)) {
     return generateRandomRPNExpression();
   }
   
@@ -138,7 +177,7 @@ export function generateStackSteps(expression: string): StackStep[] {
           description = `Pop ${b} and ${a}, calculate ${a} * ${b} = ${result}, push result`;
           break;
         case '/':
-          result = Math.round((a / b) * 100) / 100;
+          result = a / b;
           description = `Pop ${b} and ${a}, calculate ${a} / ${b} = ${result}, push result`;
           break;
         default:
