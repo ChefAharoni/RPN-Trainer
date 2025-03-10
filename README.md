@@ -7,7 +7,7 @@
 
 A web application for learning and practicing Reverse Polish Notation (RPN) calculations. This interactive tool helps users understand the stack-based approach of RPN through visualization and practice problems.
 
-🔗 **[Try the live demo](https://chefaharoni.github.io/RPN-Trainer/)**
+🔗 **[Try it here!](https://chefaharoni.github.io/RPN-Trainer/)**
 
 ![RPN Calculator Screenshot](https://raw.githubusercontent.com/ChefAharoni/RPN-Trainer/main/screenshots/rpn-calculator.png)
 
