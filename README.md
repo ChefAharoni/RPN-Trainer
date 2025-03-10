@@ -9,7 +9,7 @@ A web application for learning and practicing Reverse Polish Notation (RPN) calc
 
 🔗 **[Try it here!](https://chefaharoni.github.io/RPN-Trainer/)**
 
-![RPN Calculator Screenshot](https://raw.githubusercontent.com/ChefAharoni/RPN-Trainer/main/screenshots/rpn-calculator.png)
+![RPN Calculator Screenshot](https://raw.githubusercontent.com/ChefAharoni/RPN-Trainer/main/rpn-app-screenshot.png)
 
 ## 📋 Table of Contents
 
