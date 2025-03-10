@@ -28,6 +28,6 @@ jobs:
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: rpnSrc/dist
+          folder: RpnTrainer/dist
           branch: gh-pages
           clean: true
