@@ -1,5 +1,7 @@
 # RPN Calculator Trainer
 
+[![GitHub-Pages-Deployment](https://github.com/ChefAharoni/RPN-Trainer/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/ChefAharoni/RPN-Trainer/actions/workflows/pages/pages-build-deployment)
+
 ![RPN Calculator](https://img.shields.io/badge/Calculator-RPN-blue)
 ![React](https://img.shields.io/badge/React-18-61DAFB)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
